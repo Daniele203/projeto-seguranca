@@ -1,0 +1,15 @@
+server:
+  address: 127.0.0.1
+  port: 8081
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-exception: false
+
+spring:
+  application:
+    name: backend-mock
+
+app:
+  gateway:
+    shared-key: ${GATEWAY_SHARED_KEY:DEV_ONLY_change_this_shared_key_for_production_123}

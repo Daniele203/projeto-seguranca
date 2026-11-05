@@ -1,0 +1,49 @@
+# Para VS Code REST Client / IntelliJ HTTP Client.
+# Execute os logins, copie o accessToken obtido e substitua os tokens abaixo.
+@baseUrl = https://localhost:8443
+@userToken = COLE_TOKEN_USUARIO_AQUI
+@adminToken = COLE_TOKEN_ADMIN_AQUI
+
+### Login usuario (200)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{"username":"usuario","password":"usuario123"}
+
+### Login admin (200)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{"username":"admin","password":"admin123"}
+
+### Senha incorreta (401)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{"username":"usuario","password":"senha-incorreta"}
+
+### Sem JWT (401)
+GET {{baseUrl}}/api/pedidos
+
+### JWT invalido (401)
+GET {{baseUrl}}/api/pedidos
+Authorization: Bearer token.invalido.aqui
+
+### Pedido com usuario autenticado (200)
+GET {{baseUrl}}/api/pedidos
+Authorization: Bearer {{userToken}}
+
+### Sem role ADMIN (403)
+GET {{baseUrl}}/api/admin/status
+Authorization: Bearer {{userToken}}
+
+### Com role ADMIN (200)
+GET {{baseUrl}}/api/admin/status
+Authorization: Bearer {{adminToken}}
+
+### Acesso direto ao backend (403)
+GET http://127.0.0.1:8081/internal/pedidos
+X-Gateway-Authenticated: true
+
+### OBS: o teste 429 deve repetir mais de 20 requisicoes em 1 minuto pelo mesmo IP.
+### OBS: configure no cliente a confianca no certificado HTTPS autoassinado local.

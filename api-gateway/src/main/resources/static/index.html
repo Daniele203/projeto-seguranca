@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Secure Gateway | Painel de demonstração</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-icon" aria-hidden="true">◆</div><div><strong>Secure Gateway</strong><span>Projeto final • Segurança Web</span></div></div>
+      <div class="nav-label">PAINEL DE TESTES</div>
+      <nav aria-label="Navegação principal">
+        <a href="#autenticacao" class="nav-item">01 <span>Autenticação JWT</span></a>
+        <a href="#cenarios" class="nav-item">02 <span>Cenários de segurança</span></a>
+        <a href="#resposta" class="nav-item">03 <span>Resultado da API</span></a>
+        <a href="#arquitetura" class="nav-item">04 <span>Arquitetura</span></a>
+      </nav>
+      <div class="sidebar-foot"><span class="status-dot"></span> Ambiente de desenvolvimento <small>As ações deste painel chamam a API real.</small></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><span>Spring Boot + Spring Security</span><span class="topbar-right"><span id="connectionDot" class="status-dot muted"></span><span id="connectionLabel">Aguardando ação</span></span></header>
+      <div class="content">
+        <section class="hero"><div><div class="eyebrow">DEMONSTRAÇÃO INTERATIVA</div><h1>Segurança de APIs,<br><span>na prática.</span></h1><p>Execute os cenários exigidos pelo desafio e visualize as respostas reais do Gateway.</p></div><div class="hero-lock" aria-hidden="true">🔐</div></section>
+        <div class="metrics" aria-label="Controles implementados"><div class="metric"><span>TRANSPORTE</span><strong>HTTPS</strong><small>Porta 8443 • HSTS</small></div><div class="metric"><span>AUTENTICAÇÃO</span><strong>JWT</strong><small>Assinatura • emissor • expiração</small></div><div class="metric"><span>AUTORIZAÇÃO</span><strong>RBAC</strong><small>Roles USER e ADMIN</small></div><div class="metric"><span>LIMITAÇÃO</span><strong>20/min</strong><small>Bucket4j por IP</small></div></div>
+        <section class="panel" id="autenticacao"><div class="section-header"><div><div class="eyebrow">01 / IDENTIDADE</div><h2>Autenticação JWT</h2><p>Entre com uma conta de demonstração para gerar um token real.</p></div><div id="authBadge" class="pill pill-neutral">Não autenticado</div></div>
+          <form id="loginForm" class="login-form">
+            <label>Usuário<select id="username" autocomplete="username"><option value="usuario">usuario (USER)</option><option value="admin">admin (ADMIN)</option></select></label>
+            <label>Senha<input id="password" type="password" value="usuario123" autocomplete="current-password" required></label>
+            <button class="btn btn-primary" id="loginButton" type="submit">Entrar e gerar JWT</button>
+            <button class="btn btn-outline" id="logoutButton" type="button" disabled>Limpar token</button>
+          </form>
+          <div class="token-row"><span>Token armazenado somente em memória</span><strong id="tokenInfo">Nenhum token ativo</strong></div>
+        </section>
+        <section class="panel" id="cenarios"><div class="section-header"><div><div class="eyebrow">02 / VALIDAÇÃO</div><h2>Cenários de segurança</h2><p>Cada botão faz uma requisição real à API. O resultado aparece abaixo.</p></div></div>
+          <div class="test-grid">
+            <button class="test-card" data-test="pedidos"><span class="test-icon green">✓</span><strong>Consultar pedidos</strong><small>GET /api/pedidos com JWT</small><span class="test-action">Executar teste →</span></button>
+            <button class="test-card" data-test="semToken"><span class="test-icon orange">!</span><strong>Acesso sem token</strong><small>Esperado: 401 Unauthorized</small><span class="test-action">Executar teste →</span></button>
+            <button class="test-card" data-test="tokenInvalido"><span class="test-icon orange">×</span><strong>Token adulterado</strong><small>Esperado: 401 Unauthorized</small><span class="test-action">Executar teste →</span></button>
+            <button class="test-card" data-test="admin"><span class="test-icon blue">♙</span><strong>Rota de administrador</strong><small>200 ADMIN / 403 USER</small><span class="test-action">Executar teste →</span></button>
+            <button class="test-card" data-test="backend"><span class="test-icon blue">◇</span><strong>Backend sem confiança</strong><small>Verifica rejeição do serviço interno</small><span class="test-action">Executar teste →</span></button>
+            <button class="test-card" data-test="rate"><span class="test-icon purple">↗</span><strong>Rate Limiting</strong><small>Até 25 chamadas • espera 429</small><span class="test-action">Executar teste →</span></button>
+          </div>
+          <p class="notice" id="rateNotice">Atenção: o Rate Limiting é por IP e compartilhado entre todas as rotas. Execute esse teste por último. Se ocorrer 429 antes da última requisição, aguarde a reposição dos tokens.</p>
+        </section>
+        <section class="panel response-panel" id="resposta"><div class="section-header"><div><div class="eyebrow">03 / EVIDÊNCIA</div><h2>Resposta da API</h2><p id="responseDescription">Selecione um teste acima para visualizar a resposta.</p></div><div class="pill pill-neutral" id="httpStatus">Sem resposta</div></div>
+          <div class="response-meta"><span id="requestMethod">—</span><code id="requestUrl">Nenhuma requisição</code><span id="requestDuration">—</span></div>
+          <pre id="responseBody" tabindex="0" aria-live="polite">{
+  "info": "Os resultados aparecerão aqui após uma requisição."
+}</pre>
+          <div id="rateSummary" class="rate-summary" hidden></div>
+        </section>
+        <section class="panel" id="arquitetura"><div class="section-header"><div><div class="eyebrow">04 / ARQUITETURA</div><h2>Como a requisição é protegida</h2></div></div>
+          <div class="architecture"><div class="arch-node"><span>01</span><strong>Cliente</strong><small>Este navegador</small></div><div class="arch-arrow">→</div><div class="arch-node highlighted"><span>02</span><strong>API Gateway</strong><small>JWT • RBAC • Rate Limit</small></div><div class="arch-arrow">→</div><div class="arch-node"><span>03</span><strong>Backend Mock</strong><small>Verifica chave de confiança</small></div></div>
+          <p class="architecture-note">O navegador acessa o Gateway por HTTPS. O Gateway verifica a requisição e, quando autorizado, encaminha os pedidos para o backend local. A demonstração de acesso sem confiança é realizada pelo Gateway no servidor, pois o navegador não pode ler livremente respostas de outra origem sem CORS.</p>
+        </section>
+        <footer>Projeto acadêmico • Credenciais, segredo compartilhado e certificado são apenas de desenvolvimento. <span>Não use estes valores em produção.</span></footer>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
