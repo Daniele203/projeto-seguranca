@@ -1,0 +1,128 @@
+# Guia de comandos — Gateway Seguro
+
+**Ambiente:** Windows PowerShell, Gateway em `https://localhost:8443` e backend em `http://127.0.0.1:8081`.
+
+> `curl.exe -k` ignora a validação do certificado autoassinado somente para o laboratório. Não utilize `-k` em produção. **Não mostre tokens completos ou segredos na apresentação.**
+
+## 1. Iniciar as aplicações
+
+Abra dois terminais PowerShell na pasta do projeto:
+
+**Terminal backend:**
+```powershell
+cd backend-mock
+mvn spring-boot:run
+```
+Porta **8081**: serviço interno, somente `127.0.0.1`.
+
+**Terminal gateway:**
+```powershell
+cd api-gateway
+mvn spring-boot:run
+```
+Porta **8443**: HTTPS, entrada para cliente e frontend.
+
+Abra `https://localhost:8443/` no navegador. O certificado é autoassinado para desenvolvimento.
+
+## 2. Preparação do teste de login (porta 8443)
+
+Em um **terceiro terminal**, na pasta principal do projeto:
+
+```powershell
+'{"username":"usuario","password":"usuario123"}' | Set-Content -Encoding ascii login-usuario.json
+'{"username":"admin","password":"admin123"}' | Set-Content -Encoding ascii login-admin.json
+```
+Cria os arquivos JSON usados pelo `curl` sem problemas de aspas no PowerShell.
+
+```powershell
+$respostaUsuario = curl.exe -k -s -X POST https://localhost:8443/api/auth/login -H "Content-Type: application/json" --data-binary "@login-usuario.json" | ConvertFrom-Json
+$tokenUsuario = $respostaUsuario.accessToken
+```
+**Esperado:** login bem-sucedido, JWT de usuário guardado em memória (`$tokenUsuario`).
+
+```powershell
+$respostaAdmin = curl.exe -k -s -X POST https://localhost:8443/api/auth/login -H "Content-Type: application/json" --data-binary "@login-admin.json" | ConvertFrom-Json
+$tokenAdmin = $respostaAdmin.accessToken
+```
+**Esperado:** JWT com permissão ADMIN guardado em `$tokenAdmin`.
+
+## 3. Testes de segurança na porta 8443
+
+### 3.1 Consultar pedidos com JWT válido
+```powershell
+curl.exe -k -i https://localhost:8443/api/pedidos -H "Authorization: Bearer $tokenUsuario"
+```
+**HTTP 200** e lista de pedidos. O Gateway valida o JWT, acrescenta cabeçalhos de confiança e encaminha ao backend.
+
+### 3.2 Consultar pedidos sem JWT
+```powershell
+curl.exe -k -i https://localhost:8443/api/pedidos
+```
+**HTTP 401 Unauthorized.** Comprova que `/api/pedidos` não é público.
+
+### 3.3 Enviar token malformado
+```powershell
+curl.exe -k -i https://localhost:8443/api/pedidos -H "Authorization: Bearer token.invalido.aqui"
+```
+**HTTP 401.** Comprova rejeição de token inválido/malformado; **não** comprova isoladamente verificação de assinatura.
+
+### 3.4 Usuário comum tentando acessar rota administrativa
+```powershell
+curl.exe -k -i https://localhost:8443/api/admin/status -H "Authorization: Bearer $tokenUsuario"
+```
+**HTTP 403 Forbidden.** Usuário USER autenticado não tem permissão ADMIN.
+
+### 3.5 Administrador acessando a mesma rota
+```powershell
+curl.exe -k -i https://localhost:8443/api/admin/status -H "Authorization: Bearer $tokenAdmin"
+```
+**HTTP 200.** Comprova a autorização por role ADMIN (RBAC).
+
+### 3.6 Verificar HTTPS, HSTS e CSP
+```powershell
+curl.exe -k -i https://localhost:8443/api/pedidos
+```
+**HTTP 401** por não enviar token, mas observe os **cabeçalhos** `Strict-Transport-Security` e `Content-Security-Policy`, além de `X-Content-Type-Options`. O `-k` aceita o certificado autoassinado de teste.
+
+### 3.7 Tentar HTTP puro na porta HTTPS
+```powershell
+curl.exe -i --max-time 5 http://localhost:8443/
+```
+A conexão deve falhar: a porta 8443 espera TLS. **Não demonstra um redirecionamento HTTP→HTTPS** em outra porta.
+
+### 3.8 Rate Limiting: limite por IP
+**Execute por último**, após esperar pelo menos 60 segundos sem chamadas ao Gateway.
+```powershell
+1..25 | ForEach-Object { curl.exe -k -s -o NUL -w "%{http_code}`n" https://localhost:8443/api/pedidos }
+```
+As chamadas inicialmente retornam **401** (sem JWT); ao acabar o limite de 20 por minuto, retorna **429 Too Many Requests**. O momento exato depende das chamadas anteriores do IP.
+
+## 4. Testes diretos ao backend na porta 8081
+
+### 4.1 Tentar acessar o backend sem confiança
+```powershell
+curl.exe -i http://127.0.0.1:8081/internal/pedidos
+```
+**HTTP 403 Forbidden.** O serviço interno rejeita chamadas sem os cabeçalhos de confiança.
+
+### 4.2 Falsificar somente o cabeçalho booleano
+```powershell
+curl.exe -i http://127.0.0.1:8081/internal/pedidos -H "X-Gateway-Authenticated: true"
+```
+**HTTP 403 Forbidden.** O cabeçalho `true` sozinho não basta; o backend também exige a chave compartilhada `X-Gateway-Key`.
+
+### 4.3 Fluxo legítimo pelo Gateway (comparação)
+```powershell
+curl.exe -k -i https://localhost:8443/api/pedidos -H "Authorization: Bearer $tokenUsuario"
+```
+**HTTP 200** (token válido). O Gateway acessa o backend com os cabeçalhos exigidos. Este comando usa a porta **8443**, não 8081.
+
+## 5. Demonstração de expiração e emissor (avançado)
+
+**Expiração (`exp`):** altere temporariamente `app.jwt.expiration-ms` de `900000` para `10000` em `api-gateway/src/main/resources/application.yml`; reinicie o Gateway, faça login, consulte imediatamente (200), espere cerca de 15 s e repita usando **o mesmo** token (401). **Restaure para `900000`**.
+
+**Emissor (`iss`):** com `issuer: gateway-seguro`, gere um token válido e salve em `$tokenOriginal`. Pare o Gateway, altere **somente** `app.jwt.issuer` para `outro-emissor`, reinicie e reutilize **o mesmo** token ainda não expirado: **401**. **Restaure `gateway-seguro`** e reinicie. Não altere `secret`.
+
+## 6. Frase pronta para a apresentação
+
+> “As chamadas dos clientes passam pelo Gateway, na porta HTTPS 8443, onde são aplicados JWT, RBAC, Rate Limiting e cabeçalhos de segurança. O backend fica na porta local 8081 e rejeita tentativas diretas sem confiança. A consulta com JWT válido passa pelo Gateway e chega ao backend; sem autenticação ou permissão, é bloqueada.”
